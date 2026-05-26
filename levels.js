@@ -6,7 +6,7 @@ const LEVELS = [
     goal:  [".....",".....","..XX.",".....","....."],
     seeds: 2,
     maxTicks: 0,
-    hint: "Just tap two empty cells."
+    hint: "Просто посади два семени."
   },
   {
     id: 2,
@@ -15,78 +15,114 @@ const LEVELS = [
     goal:  [".....","..X..",".X.X.",".....","....."],
     seeds: 3,
     maxTicks: 0,
-    hint: "Tap the three cells the goal shows."
+    hint: "Поставь три семени туда, где цель."
   },
   {
     id: 3,
+    title: "Окно",
+    start: [".....",".....",".....",".....","....."],
+    goal:  [".....",".X.X.",".....",".X.X.","....."],
+    seeds: 4,
+    maxTicks: 0,
+    hint: "Четыре угла внутреннего квадрата."
+  },
+  {
+    id: 4,
     title: "Born",
     start: [".....",".....",".....",".....","....."],
     goal:  [".....",".....",".XXX.",".....","....."],
     seeds: 2,
     maxTicks: 1,
-    hint: "Place two seeds vertically across the center row, then tick."
-  },
-  {
-    id: 4,
-    title: "Cross",
-    start: [".....",".....",".....",".....","....."],
-    goal:  [".....",".X.X.","..X..",".X.X.","....."],
-    seeds: 2,
-    maxTicks: 2,
-    hint: "Two seeds, two ticks. Symmetry helps."
+    hint: "Посади два семени по вертикали через центральную строку, затем тик."
   },
   {
     id: 5,
-    title: "Pillar",
-    start: [".....",".....",".....",".....","....."],
-    goal:  ["..X..","..X..","..X..","..X..","..X.."],
-    seeds: 2,
-    maxTicks: 5,
-    hint: "Two seeds will grow into a column. Pick the right ones."
+    title: "Подоконник",
+    start: [".....",".....","..X..",".....","....."],
+    goal:  [".....",".XXX.",".....",".....","....."],
+    seeds: 1,
+    maxTicks: 1,
+    hint: "Одно семя над уже живой клеткой, потом тик."
   },
   {
     id: 6,
-    title: "Spread",
-    start: [".....",".....",".....",".....","....."],
-    goal:  [".....",".....","XXXXX",".....","....."],
-    seeds: 2,
-    maxTicks: 4,
-    hint: "A pair of seeds becomes the whole row."
+    title: "Бутон",
+    start: [".....","..X..","..X..",".....","....."],
+    goal:  [".....",".X.X.",".X.X.",".....","....."],
+    seeds: 0,
+    maxTicks: 1,
+    hint: "Сад уже готов — только нажми тик."
   },
   {
     id: 7,
-    title: "Compass",
-    start: [".....",".....",".....",".....","....."],
-    goal:  ["..X..",".....","X...X",".....","..X.."],
-    seeds: 2,
-    maxTicks: 3,
-    hint: "Cells on the middle axis can reach the corners."
-  },
-  {
-    id: 8,
     title: "Mirror",
     start: [".....",".....",".....",".....","....."],
     goal:  [".....",".X.X.",".X.X.",".....","....."],
     seeds: 2,
     maxTicks: 2,
-    hint: "Two seeds, vertically stacked."
+    hint: "Два семени, поставленных столбиком."
+  },
+  {
+    id: 8,
+    title: "Cross",
+    start: [".....",".....",".....",".....","....."],
+    goal:  [".....",".X.X.","..X..",".X.X.","....."],
+    seeds: 2,
+    maxTicks: 2,
+    hint: "Два семени, два тика. Симметрия помогает."
   },
   {
     id: 9,
+    title: "Корона",
+    start: [".....",".....",".....",".....","....."],
+    goal:  [".X.X.","..X..",".X.X.",".....","....."],
+    seeds: 2,
+    maxTicks: 2,
+    hint: "Такой же крест, но сдвинут к верхней кромке."
+  },
+  {
+    id: 10,
     title: "Echo",
     start: [".....","..X..",".....","..X..","....."],
     goal:  [".....",".X.X.","..X..",".X.X.","....."],
     seeds: 2,
     maxTicks: 2,
-    hint: "Sometimes the garden grows on its own."
+    hint: "Иногда сад прорастает сам — семена можно и не тратить."
   },
   {
-    id: 10,
+    id: 11,
+    title: "Compass",
+    start: [".....",".....",".....",".....","....."],
+    goal:  ["..X..",".....","X...X",".....","..X.."],
+    seeds: 2,
+    maxTicks: 3,
+    hint: "Клетки центральной оси умеют дотянуться до углов."
+  },
+  {
+    id: 12,
     title: "Bloom",
     start: [".....",".....",".....",".....","....."],
     goal:  [".X.X.",".....",".X.X.",".....","....."],
     seeds: 2,
     maxTicks: 3,
-    hint: "Two seeds high in the grid. Three ticks. Watch it travel."
+    hint: "Два семени высоко в саду. Три тика. Смотри, как бежит волна."
+  },
+  {
+    id: 13,
+    title: "Spread",
+    start: [".....",".....",".....",".....","....."],
+    goal:  [".....",".....","XXXXX",".....","....."],
+    seeds: 2,
+    maxTicks: 4,
+    hint: "Пара семян превращается в целый ряд."
+  },
+  {
+    id: 14,
+    title: "Pillar",
+    start: [".....",".....",".....",".....","....."],
+    goal:  ["..X..","..X..","..X..","..X..","..X.."],
+    seeds: 2,
+    maxTicks: 5,
+    hint: "Два семени вырастут в столб. Подбери правильные."
   }
 ];

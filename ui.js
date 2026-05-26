@@ -1,5 +1,123 @@
 (function () {
   const SOLVED_KEY = 'mr_solved';
+  const TUTORIAL_KEY = 'mr_tutorial_seen';
+
+  function emptyGrid() {
+    return [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
+  }
+
+  const TUT_GOAL = [".....",".....",".XXX.",".....","....."];
+  const TUT_SEEDS = 2;
+  const TUT_TICKS = 1;
+
+  const TUT_STEPS = [
+    {
+      id: 'intro',
+      title: 'Сад и цель',
+      text: 'Это поле 5×5. Тёмные кольца показывают цель — эти клетки нужно сделать живыми.',
+      advanceBy: 'next',
+      pulseGoal: true
+    },
+    {
+      id: 'seed1',
+      title: 'Посади первое семя',
+      text: 'Тапни клетку с оранжевым пульсом — она тут же станет живой.',
+      advanceBy: 'tap',
+      tapAt: [2, 1]
+    },
+    {
+      id: 'seed2',
+      title: 'Посади второе семя',
+      text: 'Теперь нажми на нижнюю отмеченную клетку.',
+      advanceBy: 'tap',
+      tapAt: [2, 3]
+    },
+    {
+      id: 'rule',
+      title: 'Правило сада',
+      text: 'У трёх пустых клеток между семенами ровно по 2 живых соседа. По правилу B2/S2 — все три сейчас оживут.',
+      advanceBy: 'next',
+      arrows: [
+        [[2,1],[1,2]], [[2,1],[2,2]], [[2,1],[3,2]],
+        [[2,3],[1,2]], [[2,3],[2,2]], [[2,3],[3,2]]
+      ]
+    },
+    {
+      id: 'tick',
+      title: 'Запусти правило',
+      text: 'Жми Tick — правило применится ко всему саду одновременно. Лишние клетки увянут, новые расцветут.',
+      advanceBy: 'tick',
+      arrows: [
+        [[2,1],[1,2]], [[2,1],[2,2]], [[2,1],[3,2]],
+        [[2,3],[1,2]], [[2,3],[2,2]], [[2,3],[3,2]]
+      ]
+    },
+    {
+      id: 'win',
+      title: 'Готово!',
+      text: 'Живые клетки совпали с целью — уровень решён. Если что-то пойдёт не так в настоящей игре, ошибки подсвечиваются красным.',
+      advanceBy: 'done',
+      isWin: true
+    }
+  ];
+
+  const tutorial = {
+    visible: false,
+    step: 0,
+    grid: null,
+    prevGrid: null,
+    seedsLeft: 0,
+    ticksLeft: 0
+  };
+
+  function startTutorial() {
+    tutorial.visible = true;
+    tutorial.step = 0;
+    tutorial.grid = [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
+    tutorial.prevGrid = null;
+    tutorial.seedsLeft = TUT_SEEDS;
+    tutorial.ticksLeft = TUT_TICKS;
+    render();
+  }
+
+  function finishTutorial() {
+    tutorial.visible = false;
+    localStorage.setItem(TUTORIAL_KEY, '1');
+    render();
+  }
+
+  function tutorialAdvance() {
+    if (tutorial.step < TUT_STEPS.length - 1) {
+      tutorial.step++;
+      render();
+    } else {
+      finishTutorial();
+    }
+  }
+
+  function tutorialCellClick(x, y) {
+    const s = TUT_STEPS[tutorial.step];
+    if (s.advanceBy !== 'tap') return;
+    if (s.tapAt[0] !== x || s.tapAt[1] !== y) return;
+    if (tutorial.grid[y][x] === 1) return;
+    tutorial.prevGrid = cloneGrid(tutorial.grid);
+    tutorial.grid[y][x] = 1;
+    tutorial.seedsLeft--;
+    playSeed();
+    tutorialAdvance();
+  }
+
+  function tutorialTickClick() {
+    const s = TUT_STEPS[tutorial.step];
+    if (s.advanceBy !== 'tick') return;
+    if (tutorial.ticksLeft <= 0) return;
+    tutorial.prevGrid = cloneGrid(tutorial.grid);
+    tutorial.grid = step(tutorial.grid);
+    tutorial.ticksLeft--;
+    playTick();
+    setTimeout(playWin, 250);
+    tutorialAdvance();
+  }
 
   const state = {
     view: 'menu',
@@ -184,14 +302,146 @@
       app.appendChild(renderMenu());
     } else {
       app.appendChild(renderLevel());
-      if (state.view === 'win') app.appendChild(renderWin());
-      if (state.view === 'lose') app.appendChild(renderLose());
     }
     if (state.showRule) app.appendChild(renderRuleModal());
+    if (tutorial.visible) app.appendChild(renderTutorial());
     app.appendChild(renderMute());
     if (state.lastDelta && !state.deltaConsumed) {
       state.deltaConsumed = true;
     }
+  }
+
+  function renderTutorial() {
+    const s = TUT_STEPS[tutorial.step];
+    const total = TUT_STEPS.length;
+
+    const dots = document.createElement('div');
+    dots.className = 'tutorial-dots';
+    for (let i = 0; i < total; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'tutorial-dot' + (i <= tutorial.step ? ' active' : '');
+      dots.appendChild(dot);
+    }
+
+    const isTickStep = s.advanceBy === 'tick';
+    const tickAttrs = {
+      class: 'btn-primary tutorial-tick' + (isTickStep ? ' tick-hint' : ''),
+      disabled: isTickStep ? false : true
+    };
+    if (isTickStep) tickAttrs.onclick = tutorialTickClick;
+    const tickButton = el('button', tickAttrs, 'Tick');
+
+    const counters = el('div', { class: 'tutorial-counters' }, [
+      el('span', { class: 'counter' }, [
+        el('span', { class: 'label' }, 'Seeds:'),
+        el('span', {}, String(tutorial.seedsLeft))
+      ]),
+      el('span', { class: 'counter' }, [
+        el('span', { class: 'label' }, 'Ticks:'),
+        el('span', {}, String(tutorial.ticksLeft))
+      ])
+    ]);
+
+    const actions = [
+      el('button', { class: 'btn-secondary', onclick: finishTutorial }, 'Пропустить')
+    ];
+    if (s.advanceBy === 'next') {
+      actions.push(el('button', { class: 'btn-primary', onclick: tutorialAdvance }, 'Дальше'));
+    } else if (s.advanceBy === 'done') {
+      actions.push(el('button', { class: 'btn-primary', onclick: tutorialAdvance }, 'Начать!'));
+    }
+
+    const card = el('div', { class: 'tutorial-card' }, [
+      dots,
+      el('h2', { class: 'tutorial-title' }, s.title),
+      el('p', { class: 'tutorial-text' }, s.text),
+      el('div', { class: 'tutorial-stage' }, [
+        renderTutorialGridWrap(s),
+        counters,
+        tickButton
+      ]),
+      el('div', { class: 'tutorial-actions' }, actions)
+    ]);
+    return el('div', { class: 'tutorial-overlay' }, [card]);
+  }
+
+  function renderTutorialGridWrap(s) {
+    const wrap = el('div', { class: 'tutorial-grid-wrap' });
+    wrap.appendChild(renderTutorialGrid(s));
+    if (s.arrows && s.arrows.length) {
+      wrap.appendChild(renderTutorialArrows(s.arrows));
+    }
+    return wrap;
+  }
+
+  function renderTutorialArrows(arrows) {
+    const PITCH = 52;
+    const HALF = 22;
+    const SIZE = 5 * 44 + 4 * 8;
+    const container = el('div', { class: 'tutorial-arrows-container', 'aria-hidden': 'true' });
+    const lines = arrows.map(([from, to], i) => {
+      const x1 = from[0] * PITCH + HALF;
+      const y1 = from[1] * PITCH + HALF;
+      const x2 = to[0] * PITCH + HALF;
+      const y2 = to[1] * PITCH + HALF;
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const x1a = (x1 + ux * (HALF * 0.55)).toFixed(1);
+      const y1a = (y1 + uy * (HALF * 0.55)).toFixed(1);
+      const x2a = (x2 - ux * (HALF * 0.4)).toFixed(1);
+      const y2a = (y2 - uy * (HALF * 0.4)).toFixed(1);
+      const draw = i * 90;
+      const pulse = draw + 600;
+      return `<line x1="${x1a}" y1="${y1a}" x2="${x2a}" y2="${y2a}" marker-end="url(#tut-arrow)" style="animation-delay: ${draw}ms, ${pulse}ms" />`;
+    }).join('');
+    container.innerHTML = `
+      <svg viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" class="tutorial-arrows-svg">
+        <defs>
+          <marker id="tut-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#B8542E" />
+          </marker>
+        </defs>
+        ${lines}
+      </svg>
+    `;
+    return container;
+  }
+
+  function renderTutorialGrid(s) {
+    const grid = el('div', { class: 'grid tutorial-grid' });
+    const current = tutorial.grid || emptyGrid();
+    const prev = tutorial.prevGrid;
+    const tapTarget = s.advanceBy === 'tap' ? s.tapAt : null;
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 5; x++) {
+        const alive = current[y][x] === 1;
+        const wasAlive = prev && prev[y][x] === 1;
+        const justDied = wasAlive && !alive;
+        const isTarget = TUT_GOAL[y][x] === 'X';
+        const isTapHere = tapTarget && tapTarget[0] === x && tapTarget[1] === y && !alive;
+        const isPulseGoal = s.pulseGoal && isTarget && !alive;
+        const classes = ['cell'];
+        if (alive) classes.push('alive');
+        if (isTarget) classes.push('target');
+        if (justDied) classes.push('just-died');
+        if (isTapHere) classes.push('tap-here');
+        if (isPulseGoal) classes.push('demo-highlight');
+        if (s.isWin && alive) classes.push('win-pulse');
+        const attrs = { class: classes.join(' ') };
+        if (isTapHere) {
+          const cx = x, cy = y;
+          attrs.onclick = () => tutorialCellClick(cx, cy);
+          attrs['aria-label'] = `Посади семя в клетке ряд ${y+1} столбец ${x+1}`;
+        } else {
+          attrs.disabled = true;
+          attrs['aria-hidden'] = 'true';
+        }
+        if (s.isWin && alive) attrs.style = `animation-delay: ${y * 40}ms`;
+        grid.appendChild(el('button', attrs));
+      }
+    }
+    return grid;
   }
 
   function renderStatus(lvl) {
@@ -264,7 +514,11 @@
       el('button', {
         class: 'btn-primary',
         onclick: () => loadLevel(nextToPlay)
-      }, 'Play')
+      }, 'Play'),
+      el('button', {
+        class: 'btn-secondary tutorial-replay',
+        onclick: startTutorial
+      }, 'Туториал')
     ]));
 
     screen.appendChild(renderRuleCard());
@@ -272,16 +526,18 @@
     screen.appendChild(el('div', { class: 'levels-title' }, 'Levels'));
 
     const grid = el('div', { class: 'level-grid' });
-    for (let i = 1; i <= 10; i++) {
+    const maxId = LEVELS[LEVELS.length - 1].id;
+    for (let i = 1; i <= maxId; i++) {
       const exists = !!getLevel(i);
       const solved = state.solvedLevels.has(i);
       const isNext = i === nextToPlay && exists;
       const classes = ['level-chip'];
       if (solved) classes.push('solved');
       if (isNext) classes.push('next');
+      if (exists && i > 10) classes.push('advanced');
       const attrs = {
         class: classes.join(' '),
-        'aria-label': `Level ${i}${solved ? ', solved' : ''}${isNext ? ', next to play' : ''}`
+        'aria-label': `Уровень ${i}${solved ? ', решён' : ''}${isNext ? ', следующий' : ''}${i > 10 ? ', продвинутый' : ''}`
       };
       if (exists) {
         attrs.onclick = () => loadLevel(i);
@@ -329,18 +585,24 @@
 
     screen.appendChild(renderStatus(lvl));
 
-    screen.appendChild(el('div', { class: 'actions' }, [
-      el('button', {
-        class: 'btn-secondary',
-        onclick: undo,
-        disabled: state.history.length === 0 ? true : false
-      }, 'Undo'),
-      el('button', {
-        class: 'btn-primary',
-        onclick: runTick,
-        disabled: state.ticksLeft <= 0 ? true : false
-      }, 'Tick')
-    ]));
+    if (state.view === 'win') {
+      screen.appendChild(renderWinPanel(lvl));
+    } else if (state.view === 'lose') {
+      screen.appendChild(renderLosePanel(lvl));
+    } else {
+      screen.appendChild(el('div', { class: 'actions' }, [
+        el('button', {
+          class: 'btn-secondary',
+          onclick: undo,
+          disabled: state.history.length === 0 ? true : false
+        }, 'Undo'),
+        el('button', {
+          class: 'btn-primary',
+          onclick: runTick,
+          disabled: state.ticksLeft <= 0 ? true : false
+        }, 'Tick')
+      ]));
+    }
 
     screen.appendChild(el('div', { class: 'restart-row' }, [
       el('button', { class: 'btn-secondary', onclick: restart }, 'Restart')
@@ -353,6 +615,8 @@
     const grid = el('div', { class: 'grid', role: 'grid', 'aria-label': 'Garden grid' });
     const showDelta = state.lastDelta && !state.deltaConsumed;
     const isJustDied = (x, y) => showDelta && state.lastDelta.diedCells.some(c => c[0] === x && c[1] === y);
+    const showLose = state.view === 'lose';
+    const showWin = state.view === 'win';
     for (let y = 0; y < 5; y++) {
       for (let x = 0; x < 5; x++) {
         const alive = state.current[y][x] === 1;
@@ -362,6 +626,9 @@
         if (isTarget) classes.push('target');
         if (alive && !isTarget) classes.push('off-target');
         if (!alive && isJustDied(x, y)) classes.push('just-died');
+        if (showLose && alive && !isTarget) classes.push('lose-extra');
+        if (showLose && !alive && isTarget) classes.push('lose-missing');
+        if (showWin && alive) classes.push('win-pulse');
 
         const aliveStr = alive ? 'alive' : 'empty';
         const targetStr = isTarget ? ', part of target' : '';
@@ -377,52 +644,66 @@
           const cx = x, cy = y;
           attrs.onclick = () => placeSeed(cx, cy);
         }
+        if (showWin && alive) {
+          attrs.style = `animation-delay: ${y * 40}ms`;
+        }
         grid.appendChild(el('button', attrs));
       }
     }
     return grid;
   }
 
-  function renderWin() {
-    const lvl = getLevel(state.levelId);
+  function renderWinPanel(lvl) {
     const isLast = !getLevel(state.levelId + 1);
-    const explainParts = [
-      `Все живые клетки совпали с целью на ${lvl.title}.`
-    ];
+    const explainParts = [`Все живые клетки совпали с целью на ${lvl.title}.`];
     if (state.lastDelta && state.lastDelta.action === 'tick') {
       explainParts.push(`Последний тик: ожили ${state.lastDelta.born}, погибли ${state.lastDelta.died}.`);
     }
-    const card = el('div', { class: 'overlay-card' }, [
-      el('h2', {}, isLast ? 'Сад собран целиком' : `Уровень ${lvl.id} решён`),
-      el('p', { class: 'overlay-text' }, explainParts.join(' ')),
-      el('div', { class: 'overlay-actions' }, isLast
+    return el('div', { class: 'result-panel result-win' }, [
+      el('h3', { class: 'result-title' }, isLast ? 'Сад собран целиком' : `Уровень ${lvl.id} решён`),
+      el('p', { class: 'result-text' }, explainParts.join(' ')),
+      el('div', { class: 'result-actions' }, isLast
         ? [el('button', { class: 'btn-primary', onclick: goToMenu }, 'В меню')]
         : [
             el('button', { class: 'btn-primary', onclick: nextLevel }, 'Следующий уровень'),
             el('button', { class: 'btn-secondary', onclick: restart }, 'Сыграть заново')
           ])
     ]);
-    return el('div', { class: 'overlay' }, [card]);
   }
 
-  function renderLose() {
-    const lvl = getLevel(state.levelId);
-    const reasonParts = ['Семена и тики закончились, а сад не совпал с целью.'];
-    if (state.lastDelta && state.lastDelta.action === 'tick' && state.lastDelta.died > 0) {
-      reasonParts.push(`На последнем тике погибли ${state.lastDelta.died} клеток — у них не было ровно 2 соседей.`);
-    } else {
-      reasonParts.push('Попробуй другое расположение семян или используй Отмену.');
+  function countMismatches(current, goal) {
+    let extra = 0;
+    let missing = 0;
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 5; x++) {
+        const target = goal[y][x] === 'X' ? 1 : 0;
+        if (current[y][x] === 1 && target === 0) extra++;
+        else if (current[y][x] === 0 && target === 1) missing++;
+      }
     }
-    const card = el('div', { class: 'overlay-card' }, [
-      el('h2', {}, 'Попробуй ещё раз'),
-      el('p', { class: 'overlay-text' }, reasonParts.join(' ')),
-      el('div', { class: 'overlay-actions' }, [
+    return { extra, missing };
+  }
+
+  function renderLosePanel(lvl) {
+    const { extra, missing } = countMismatches(state.current, lvl.goal);
+    const parts = [];
+    if (extra > 0 && missing > 0) {
+      parts.push(`Лишних живых клеток: ${extra}, недостающих: ${missing}.`);
+    } else if (extra > 0) {
+      parts.push(`Лишних живых клеток: ${extra}.`);
+    } else if (missing > 0) {
+      parts.push(`Недостающих клеток: ${missing}.`);
+    }
+    parts.push('Они подсвечены красным на поле.');
+    parts.push('Откати ход и попробуй другое размещение, или начни заново.');
+    return el('div', { class: 'result-panel result-lose' }, [
+      el('h3', { class: 'result-title' }, 'Не получилось'),
+      el('p', { class: 'result-text' }, parts.join(' ')),
+      el('div', { class: 'result-actions' }, [
         el('button', { class: 'btn-primary', onclick: restart }, 'Заново'),
-        el('button', { class: 'btn-secondary', onclick: undo, disabled: state.history.length === 0 }, 'Отменить ход'),
-        el('button', { class: 'btn-secondary', onclick: goToMenu }, 'В меню')
+        el('button', { class: 'btn-secondary', onclick: undo, disabled: state.history.length === 0 }, 'Отменить ход')
       ])
     ]);
-    return el('div', { class: 'overlay' }, [card]);
   }
 
   function renderMute() {
@@ -435,6 +716,14 @@
   }
 
   document.addEventListener('keydown', (e) => {
+    if (tutorial.visible) {
+      if (e.key === 'Escape') { finishTutorial(); e.preventDefault(); }
+      else if (e.key === 'Enter' || e.key === 'ArrowRight') {
+        const s = TUT_STEPS[tutorial.step];
+        if (s.advanceBy === 'next' || s.advanceBy === 'done') { tutorialAdvance(); e.preventDefault(); }
+      }
+      return;
+    }
     if (state.showRule) {
       if (e.key === 'Escape') { state.showRule = false; render(); e.preventDefault(); }
       return;
@@ -449,5 +738,9 @@
     }
   });
 
-  render();
+  if (!localStorage.getItem(TUTORIAL_KEY)) {
+    startTutorial();
+  } else {
+    render();
+  }
 })();
