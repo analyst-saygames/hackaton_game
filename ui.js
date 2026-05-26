@@ -1,6 +1,30 @@
 (function () {
   const SOLVED_KEY = 'mr_solved';
   const TUTORIAL_KEY = 'mr_tutorial_seen';
+  const CONCEPTS_KEY = 'mr_concepts_seen';
+  const LEVELS_VERSION_KEY = 'mr_levels_version';
+  const CURRENT_LEVELS_VERSION = '2';
+
+  if (localStorage.getItem(LEVELS_VERSION_KEY) !== CURRENT_LEVELS_VERSION) {
+    localStorage.removeItem(SOLVED_KEY);
+    localStorage.removeItem(TUTORIAL_KEY);
+    localStorage.removeItem(CONCEPTS_KEY);
+    localStorage.setItem(LEVELS_VERSION_KEY, CURRENT_LEVELS_VERSION);
+  }
+
+  function loadConcepts() {
+    try {
+      const raw = localStorage.getItem(CONCEPTS_KEY);
+      if (!raw) return new Set();
+      return new Set(JSON.parse(raw));
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function persistConcepts(set) {
+    localStorage.setItem(CONCEPTS_KEY, JSON.stringify([...set]));
+  }
 
   function emptyGrid() {
     return [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
@@ -35,8 +59,10 @@
     {
       id: 'rule',
       title: 'Правило сада',
-      text: 'У трёх пустых клеток между семенами ровно по 2 живых соседа. По правилу B2/S2 — все три сейчас оживут.',
+      text: 'У трёх пустых клеток между семенами ровно по 2 живых соседа — по правилу сада все три сейчас оживут. А у самих семян соседей не хватит — они уйдут.',
       advanceBy: 'next',
+      previewBirth: [[1,2],[2,2],[3,2]],
+      previewDeath: [[2,1],[2,3]],
       arrows: [
         [[2,1],[1,2]], [[2,1],[2,2]], [[2,1],[3,2]],
         [[2,3],[1,2]], [[2,3],[2,2]], [[2,3],[3,2]]
@@ -47,6 +73,8 @@
       title: 'Запусти правило',
       text: 'Жми Tick — правило применится ко всему саду одновременно. Лишние клетки увянут, новые расцветут.',
       advanceBy: 'tick',
+      previewBirth: [[1,2],[2,2],[3,2]],
+      previewDeath: [[2,1],[2,3]],
       arrows: [
         [[2,1],[1,2]], [[2,1],[2,2]], [[2,1],[3,2]],
         [[2,3],[1,2]], [[2,3],[2,2]], [[2,3],[3,2]]
@@ -83,6 +111,9 @@
   function finishTutorial() {
     tutorial.visible = false;
     localStorage.setItem(TUTORIAL_KEY, '1');
+    state.seenConcepts.add('rule');
+    state.seenConcepts.add('tick');
+    persistConcepts(state.seenConcepts);
     render();
   }
 
@@ -127,7 +158,9 @@
     ticksLeft: 0,
     history: [],
     solvedLevels: loadSolved(),
+    seenConcepts: loadConcepts(),
     showRule: false,
+    introDismissed: false,
     lastDelta: null,
     deltaConsumed: true,
     pendingEndAt: 0,
@@ -136,23 +169,23 @@
 
   const SOLUTIONS = {
     1:  ['place(2,1)','place(2,3)','tick'],
-    2:  ['place(2,0)','tick'],
-    3:  ['tick'],
+    2:  ['tick'],
+    3:  ['place(2,0)','tick'],
     4:  ['place(2,1)','place(2,2)','tick'],
     5:  ['place(2,1)','place(2,3)','tick','tick'],
-    6:  ['place(2,1)','place(2,3)','tick','tick','tick'],
-    7:  ['place(2,0)','place(2,1)','tick','tick','tick'],
-    8:  ['place(1,2)','place(2,2)','tick','tick','tick','tick'],
-    9:  ['place(2,1)','place(2,2)','tick','tick','tick','tick'],
-    10: ['place(1,2)','place(3,2)'],
+    6:  ['place(1,2)','place(3,2)'],
+    7:  ['place(2,1)','place(2,3)','tick'],
+    8:  ['place(2,1)','place(2,3)','tick','tick'],
+    9:  ['place(2,1)','place(2,2)','tick'],
+    10: ['place(0,2)','place(4,2)','tick'],
     11: ['place(2,1)','place(2,3)','tick'],
-    12: ['place(2,1)','place(2,3)','tick','tick'],
-    13: ['place(2,1)','place(2,2)','tick'],
-    14: ['place(0,2)','place(4,2)','tick'],
+    12: ['place(2,1)','place(2,3)','tick','tick','tick'],
+    13: ['place(2,0)','place(2,1)','tick','tick','tick'],
+    14: ['place(1,2)','place(2,2)','tick','tick','tick','tick'],
     15: ['place(2,1)','place(2,2)','tick','tick','tick','tick'],
-    16: ['place(2,1)','place(2,3)','tick'],
-    17: ['place(1,1)','place(2,1)','place(1,2)','place(2,2)','tick'],
-    18: ['place(2,1)','place(2,2)','place(2,3)','tick'],
+    16: ['place(2,1)','place(2,2)','tick','tick','tick','tick'],
+    17: ['place(2,1)','place(2,2)','place(2,3)','tick'],
+    18: ['place(1,1)','place(2,1)','place(1,2)','place(2,2)','tick'],
     19: ['place(2,0)','place(2,1)','place(2,2)','place(2,3)','tick'],
     20: ['place(2,0)','place(0,2)','place(4,2)','place(2,4)','tick'],
     21: ['place(2,1)','place(2,3)','tick','place(1,3)','place(3,3)'],
@@ -215,6 +248,17 @@
     state.lastDelta = null;
     state.deltaConsumed = true;
     state.pendingEndAt = Date.now();
+    state.introDismissed = false;
+    render();
+    if (id === 1) {
+      startTutorial();
+    }
+  }
+
+  function dismissIntro(conceptId) {
+    state.seenConcepts.add(conceptId);
+    persistConcepts(state.seenConcepts);
+    state.introDismissed = true;
     render();
   }
 
@@ -446,7 +490,7 @@
     const HALF = 22;
     const SIZE = 5 * 44 + 4 * 8;
     const container = el('div', { class: 'tutorial-arrows-container', 'aria-hidden': 'true' });
-    const lines = arrows.map(([from, to], i) => {
+    const lines = arrows.map(([from, to]) => {
       const x1 = from[0] * PITCH + HALF;
       const y1 = from[1] * PITCH + HALF;
       const x2 = to[0] * PITCH + HALF;
@@ -454,18 +498,16 @@
       const dx = x2 - x1, dy = y2 - y1;
       const len = Math.hypot(dx, dy) || 1;
       const ux = dx / len, uy = dy / len;
-      const x1a = (x1 + ux * (HALF * 0.55)).toFixed(1);
-      const y1a = (y1 + uy * (HALF * 0.55)).toFixed(1);
-      const x2a = (x2 - ux * (HALF * 0.4)).toFixed(1);
-      const y2a = (y2 - uy * (HALF * 0.4)).toFixed(1);
-      const draw = i * 90;
-      const pulse = draw + 600;
-      return `<line x1="${x1a}" y1="${y1a}" x2="${x2a}" y2="${y2a}" marker-end="url(#tut-arrow)" style="animation-delay: ${draw}ms, ${pulse}ms" />`;
+      const x1a = (x1 + ux * (HALF * 0.65)).toFixed(1);
+      const y1a = (y1 + uy * (HALF * 0.65)).toFixed(1);
+      const x2a = (x2 - ux * (HALF * 0.55)).toFixed(1);
+      const y2a = (y2 - uy * (HALF * 0.55)).toFixed(1);
+      return `<line x1="${x1a}" y1="${y1a}" x2="${x2a}" y2="${y2a}" marker-end="url(#tut-arrow)" />`;
     }).join('');
     container.innerHTML = `
       <svg viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" class="tutorial-arrows-svg">
         <defs>
-          <marker id="tut-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <marker id="tut-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#B8542E" />
           </marker>
         </defs>
@@ -480,6 +522,8 @@
     const current = tutorial.grid || emptyGrid();
     const prev = tutorial.prevGrid;
     const tapTarget = s.advanceBy === 'tap' ? s.tapAt : null;
+    const previewSet = s.previewBirth ? new Set(s.previewBirth.map(c => c[0] + ',' + c[1])) : null;
+    const deathSet = s.previewDeath ? new Set(s.previewDeath.map(c => c[0] + ',' + c[1])) : null;
     for (let y = 0; y < 5; y++) {
       for (let x = 0; x < 5; x++) {
         const alive = current[y][x] === 1;
@@ -488,12 +532,16 @@
         const isTarget = TUT_GOAL[y][x] === 'X';
         const isTapHere = tapTarget && tapTarget[0] === x && tapTarget[1] === y && !alive;
         const isPulseGoal = s.pulseGoal && isTarget && !alive;
+        const isPreviewBirth = previewSet && previewSet.has(x + ',' + y) && !alive;
+        const isPreviewDeath = deathSet && deathSet.has(x + ',' + y) && alive;
         const classes = ['cell'];
         if (alive) classes.push('alive');
         if (isTarget) classes.push('target');
         if (justDied) classes.push('just-died');
         if (isTapHere) classes.push('tap-here');
         if (isPulseGoal) classes.push('demo-highlight');
+        if (isPreviewBirth) classes.push('preview-birth');
+        if (isPreviewDeath) classes.push('preview-death');
         if (s.isWin && alive) classes.push('win-pulse');
         const attrs = { class: classes.join(' ') };
         if (isTapHere) {
@@ -509,6 +557,20 @@
       }
     }
     return grid;
+  }
+
+  function renderIntroCard(lvl) {
+    if (!lvl.intro || !lvl.conceptId) return null;
+    if (state.seenConcepts.has(lvl.conceptId)) return null;
+    if (state.introDismissed) return null;
+    return el('div', { class: 'intro-card' }, [
+      el('div', { class: 'intro-label' }, 'Новое'),
+      el('p', { class: 'intro-text' }, lvl.intro),
+      el('button', {
+        class: 'btn-primary intro-dismiss',
+        onclick: () => dismissIntro(lvl.conceptId)
+      }, 'Понятно')
+    ]);
   }
 
   function renderStatus(lvl) {
@@ -642,6 +704,9 @@
     screen.appendChild(el('h2', { class: 'level-title' }, `"${lvl.title}"`));
     screen.appendChild(el('p', { class: 'hint' }, lvl.hint));
     screen.appendChild(el('div', { class: 'divider' }));
+
+    const intro = renderIntroCard(lvl);
+    if (intro) screen.appendChild(intro);
 
     screen.appendChild(renderGrid(lvl));
 
@@ -832,9 +897,5 @@
     }
   });
 
-  if (!localStorage.getItem(TUTORIAL_KEY)) {
-    startTutorial();
-  } else {
-    render();
-  }
+  render();
 })();
