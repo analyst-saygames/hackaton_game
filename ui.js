@@ -169,7 +169,7 @@
 
   const SOLUTIONS = {
     1:  ['place(2,1)','place(2,3)','tick'],
-    2:  ['place(1,2)','place(3,2)'],
+    2:  ['place(2,1)','place(2,3)','tick'],
     3:  ['place(2,1)','place(2,2)','tick'],
     4:  ['place(2,1)','place(2,3)','tick'],
     5:  ['place(2,1)','place(2,3)','tick','tick'],
@@ -191,10 +191,11 @@
     21: ['place(2,1)','place(2,3)','tick','place(0,2)','place(4,2)','tick']
   };
 
-  const SOLVE_DELAY_MS = 650;
+  const SOLVE_PLACE_DELAY_MS = 700;
+  const SOLVE_TICK_DELAY_MS = 1500;
   let solveToken = 0;
 
-  const END_DELAY_MS = 1100;
+  const END_DELAY_MS = 1400;
 
   function setDelta(d) {
     state.lastDelta = d;
@@ -204,13 +205,26 @@
   function computeDelta(prev, next) {
     const bornCells = [];
     const diedCells = [];
+    const flows = [];
     for (let y = 0; y < 5; y++) {
       for (let x = 0; x < 5; x++) {
-        if (prev[y][x] === 0 && next[y][x] === 1) bornCells.push([x, y]);
-        else if (prev[y][x] === 1 && next[y][x] === 0) diedCells.push([x, y]);
+        if (prev[y][x] === 0 && next[y][x] === 1) {
+          bornCells.push([x, y]);
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < 5 && ny >= 0 && ny < 5 && prev[ny][nx] === 1) {
+                flows.push({ fromX: nx, fromY: ny, toX: x, toY: y });
+              }
+            }
+          }
+        } else if (prev[y][x] === 1 && next[y][x] === 0) {
+          diedCells.push([x, y]);
+        }
       }
     }
-    return { bornCells, diedCells, born: bornCells.length, died: diedCells.length };
+    return { bornCells, diedCells, born: bornCells.length, died: diedCells.length, flows };
   }
 
   function loadSolved() {
@@ -234,6 +248,8 @@
   function loadLevel(id) {
     const lvl = getLevel(id);
     if (!lvl) return;
+    state.solving = false;
+    solveToken++;
     const parsed = parseLevel(lvl.start);
     state.view = 'level';
     state.levelId = id;
@@ -334,8 +350,6 @@
   }
 
   function restart() {
-    state.solving = false;
-    solveToken++;
     loadLevel(state.levelId);
   }
 
@@ -343,9 +357,8 @@
     if (state.view !== 'level' && state.view !== 'lose' && state.view !== 'win') return;
     const sol = SOLUTIONS[state.levelId];
     if (!sol) return;
-    solveToken++;
-    const myToken = solveToken;
     loadLevel(state.levelId);
+    const myToken = solveToken;
     state.solving = true;
     render();
     const actions = sol.slice();
@@ -358,15 +371,17 @@
         return;
       }
       const a = actions.shift();
+      let nextDelay = SOLVE_PLACE_DELAY_MS;
       if (a === 'tick') {
         runTick();
+        nextDelay = SOLVE_TICK_DELAY_MS;
       } else {
         const m = a.match(/place\((\d+),(\d+)\)/);
         if (m) placeSeed(+m[1], +m[2]);
       }
-      setTimeout(stepFn, SOLVE_DELAY_MS);
+      setTimeout(stepFn, nextDelay);
     };
-    setTimeout(stepFn, 350);
+    setTimeout(stepFn, 450);
   }
 
   function goToMenu() {
@@ -706,7 +721,13 @@
     const intro = renderIntroCard(lvl);
     if (intro) screen.appendChild(intro);
 
-    screen.appendChild(renderGrid(lvl));
+    const gridSection = el('div', { class: 'grid-section' });
+    gridSection.appendChild(renderGrid(lvl));
+    const sd = state.lastDelta && !state.deltaConsumed;
+    if (sd && state.lastDelta.flows && state.lastDelta.flows.length) {
+      gridSection.appendChild(renderFlowOverlay(state.lastDelta.flows));
+    }
+    screen.appendChild(gridSection);
 
     screen.appendChild(el('div', { class: 'counters' }, [
       el('div', { class: 'counter' }, [
@@ -753,10 +774,30 @@
     return screen;
   }
 
+  function renderFlowOverlay(flows) {
+    const PITCH = 68;
+    const HALF = 28;
+    const SIZE = 5 * 56 + 4 * 12;
+    const circles = flows.map((f, i) => {
+      const fromX = f.fromX * PITCH + HALF;
+      const fromY = f.fromY * PITCH + HALF;
+      const toX = f.toX * PITCH + HALF;
+      const toY = f.toY * PITCH + HALF;
+      const dx = (toX - fromX).toFixed(1);
+      const dy = (toY - fromY).toFixed(1);
+      const delay = i * 55;
+      return `<circle cx="${fromX}" cy="${fromY}" r="7" class="flow-particle" style="--dx: ${dx}px; --dy: ${dy}px; animation-delay: ${delay}ms" />`;
+    }).join('');
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<svg class="flow-overlay" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${circles}</svg>`;
+    return wrap.firstChild;
+  }
+
   function renderGrid(lvl) {
     const grid = el('div', { class: 'grid', role: 'grid', 'aria-label': 'Garden grid' });
     const showDelta = state.lastDelta && !state.deltaConsumed;
     const isJustDied = (x, y) => showDelta && state.lastDelta.diedCells.some(c => c[0] === x && c[1] === y);
+    const isJustBorn = (x, y) => showDelta && state.lastDelta.action === 'tick' && state.lastDelta.bornCells && state.lastDelta.bornCells.some(c => c[0] === x && c[1] === y);
     const showLose = state.view === 'lose';
     const showWin = state.view === 'win';
     const walls = state.walls;
@@ -778,6 +819,7 @@
         if (isWildcard) classes.push('wildcard');
         if (alive && isCounted && !isTarget && !isAnchor) classes.push('off-target');
         if (!alive && !isWall && isJustDied(x, y)) classes.push('just-died');
+        if (alive && !isAnchor && isJustBorn(x, y)) classes.push('just-born');
         if (showLose && isCounted) {
           if (alive && !isTarget && !isAnchor) classes.push('lose-extra');
           if (!alive && isTarget) classes.push('lose-missing');

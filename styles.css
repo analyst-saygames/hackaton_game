@@ -218,6 +218,48 @@ html, body {
   margin: 0 auto 28px;
 }
 
+.grid-section {
+  position: relative;
+  margin: 0 auto 28px;
+  width: fit-content;
+}
+
+.grid-section .grid {
+  margin: 0;
+}
+
+.flow-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  overflow: visible;
+}
+
+.flow-particle {
+  fill: var(--alive);
+  opacity: 0;
+  animation: flow-travel 850ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  filter: drop-shadow(0 0 5px rgba(46, 74, 31, 0.55));
+}
+
+@keyframes flow-travel {
+  0%   { transform: translate(0, 0);                  opacity: 0; }
+  12%  { transform: translate(0, 0);                  opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy));  opacity: 0; }
+}
+
+.cell.alive.just-born {
+  animation: born-flow 480ms cubic-bezier(0.34, 1.56, 0.64, 1) 700ms both;
+}
+
+@keyframes born-flow {
+  0%   { background: transparent; transform: scale(0); }
+  60%  { background: var(--alive); transform: scale(1.12); }
+  100% { background: var(--alive); transform: scale(1); }
+}
+
 .cell {
   position: relative;
   width: 56px;
@@ -239,7 +281,7 @@ html, body {
   inset: 0;
   border-radius: 50%;
   background: var(--alive);
-  animation: wilt 520ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: wilt 720ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
   pointer-events: none;
 }
 
