@@ -613,20 +613,61 @@
     return el('div', { class: `status status-${tone}` }, text);
   }
 
+  function renderMiniGrid(rows) {
+    const grid = el('div', { class: 'mini-grid' });
+    for (const row of rows) {
+      for (const c of row) {
+        const classes = ['mini-cell'];
+        if (c === 'X') classes.push('alive');
+        else if (c === 'A') classes.push('mini-anchor');
+        else if (c === '#') classes.push('mini-wall');
+        else if (c === '?') classes.push('mini-wildcard');
+        grid.appendChild(el('div', { class: classes.join(' ') }));
+      }
+    }
+    return grid;
+  }
+
+  function renderRuleItem(text, before, after) {
+    return el('li', { class: 'rule-item' }, [
+      el('div', { class: 'rule-item-text' }, text),
+      el('div', { class: 'rule-item-example' }, [
+        renderMiniGrid(before),
+        el('div', { class: 'rule-item-arrow' }, '→'),
+        renderMiniGrid(after)
+      ])
+    ]);
+  }
+
+  function renderSpecialItem(text, sample) {
+    return el('li', { class: 'rule-item rule-item-special' }, [
+      el('div', { class: 'rule-item-text' }, text),
+      el('div', { class: 'rule-item-example' }, [
+        renderMiniGrid(sample)
+      ])
+    ]);
+  }
+
   function renderRuleCard() {
     return el('section', { class: 'rule-card', 'aria-label': 'Правило игры' }, [
       el('h3', { class: 'rule-title' }, 'Правило'),
       el('p', { class: 'rule-lead' }, 'Клетка жива на следующем тике, только если у неё ровно 2 живых соседа (считаются все 8, включая диагональные).'),
       el('ul', { class: 'rule-list' }, [
-        el('li', {}, 'Пустая клетка с 2 живыми соседями — оживает'),
-        el('li', {}, 'Живая клетка с 2 живыми соседями — остаётся живой'),
-        el('li', {}, 'У клетки 0, 1, 3 и более соседей — пустеет (умирает)')
+        renderRuleItem('Пустая клетка с 2 живыми соседями — оживает',
+          ['.X.','...','.X.'], ['...','.X.','...']),
+        renderRuleItem('Живая клетка с 2 живыми соседями — остаётся живой',
+          ['X.X','.X.','...'], ['...','.X.','...']),
+        renderRuleItem('У клетки 0, 1, 3 и более соседей — пустеет (умирает)',
+          ['.X.','.X.','...'], ['...','...','...'])
       ]),
       el('h4', { class: 'rule-subtitle' }, 'Особые клетки'),
       el('ul', { class: 'rule-list' }, [
-        el('li', {}, 'Стена (серая с штриховкой) — нельзя посадить, не считается соседом, всегда пустая'),
-        el('li', {}, 'Якорь (золотистая) — всегда живая, считается соседом, не умирает'),
-        el('li', {}, 'Точечная цель — вольная клетка: подходит любое состояние')
+        renderSpecialItem('Стена (серая с штриховкой) — нельзя посадить, не считается соседом, всегда пустая',
+          ['...','.#.','...']),
+        renderSpecialItem('Якорь (золотистая) — всегда живая, считается соседом, не умирает',
+          ['...','.A.','...']),
+        renderSpecialItem('Точечная цель — вольная клетка: подходит любое состояние',
+          ['...','.?.','...'])
       ])
     ]);
   }

@@ -718,6 +718,77 @@ html, body {
   margin-bottom: 0;
 }
 
+.rule-card .rule-list li.rule-item {
+  margin-bottom: 12px;
+}
+
+.rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rule-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.rule-item-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rule-item-arrow {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.mini-grid {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 12px);
+  grid-template-rows: repeat(3, 12px);
+  gap: 2px;
+}
+
+.mini-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px dashed rgba(107, 95, 78, 0.28);
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.mini-cell.alive {
+  background: var(--alive);
+  border: none;
+}
+
+.mini-cell.mini-anchor {
+  background: var(--alive);
+  border: 1px solid #C99A3A;
+}
+
+.mini-cell.mini-wall {
+  background: rgba(31, 27, 22, 0.18);
+  border: 1px solid rgba(31, 27, 22, 0.3);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0,
+    transparent 1.5px,
+    rgba(31, 27, 22, 0.35) 1.5px,
+    rgba(31, 27, 22, 0.35) 2.5px
+  );
+}
+
+.mini-cell.mini-wildcard {
+  border: 1px dotted rgba(107, 95, 78, 0.55);
+}
+
 .rule-modal {
   max-width: 360px;
   text-align: left;
