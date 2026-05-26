@@ -1,0 +1,18 @@
+# IDE
+.idea/
+.vscode/
+
+# Playwright MCP working files
+.playwright-mcp/
+
+# Local screenshots and frame captures
+frames/
+game-loaded.png
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Throwaway verification scripts (per CLAUDE.md)
+verify.cjs
+verify.js
