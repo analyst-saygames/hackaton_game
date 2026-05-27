@@ -26,128 +26,39 @@
     localStorage.setItem(CONCEPTS_KEY, JSON.stringify([...set]));
   }
 
-  function emptyGrid() {
-    return [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
+  // ----- inline guided first level (playable-style) -----
+  // The guide drives the real level-1 board: it highlights the next cell to tap,
+  // then pulses Tick, instead of a separate multi-screen modal.
+  function buildGuideSeq(solution) {
+    if (!solution) return null;
+    return solution.map(function (a) {
+      const m = a.match(/place\((\d+),(\d+)\)/);
+      return m ? { type: 'place', x: +m[1], y: +m[2] } : { type: 'tick' };
+    });
   }
 
-  const TUT_GOAL = [".....",".....",".XXX.",".....","....."];
-  const TUT_SEEDS = 2;
-  const TUT_TICKS = 1;
-
-  const TUT_STEPS = [
-    {
-      id: 'intro',
-      title: 'Сад и цель',
-      text: 'Это поле 5×5. Тёмные кольца показывают цель — эти клетки нужно сделать живыми.',
-      advanceBy: 'next',
-      pulseGoal: true
-    },
-    {
-      id: 'seed1',
-      title: 'Посади первое семя',
-      text: 'Тапни клетку с оранжевым пульсом — она тут же станет живой.',
-      advanceBy: 'tap',
-      tapAt: [2, 1]
-    },
-    {
-      id: 'seed2',
-      title: 'Посади второе семя',
-      text: 'Теперь нажми на нижнюю отмеченную клетку.',
-      advanceBy: 'tap',
-      tapAt: [2, 3]
-    },
-    {
-      id: 'rule',
-      title: 'Правило сада',
-      text: 'У трёх пустых клеток между семенами ровно по 2 живых соседа — по правилу сада все три сейчас оживут. А у самих семян соседей не хватит — они уйдут.',
-      advanceBy: 'next',
-      previewBirth: [[1,2],[2,2],[3,2]],
-      previewDeath: [[2,1],[2,3]],
-      arrows: [
-        [[2,1],[1,2]], [[2,1],[2,2]], [[2,1],[3,2]],
-        [[2,3],[1,2]], [[2,3],[2,2]], [[2,3],[3,2]]
-      ]
-    },
-    {
-      id: 'tick',
-      title: 'Запусти правило',
-      text: 'Жми Tick — правило применится ко всему саду одновременно. Лишние клетки увянут, новые расцветут.',
-      advanceBy: 'tick',
-      previewBirth: [[1,2],[2,2],[3,2]],
-      previewDeath: [[2,1],[2,3]],
-      arrows: [
-        [[2,1],[1,2]], [[2,1],[2,2]], [[2,1],[3,2]],
-        [[2,3],[1,2]], [[2,3],[2,2]], [[2,3],[3,2]]
-      ]
-    },
-    {
-      id: 'win',
-      title: 'Готово!',
-      text: 'Живые клетки совпали с целью — уровень решён. Если что-то пойдёт не так в настоящей игре, ошибки подсвечиваются красным.',
-      advanceBy: 'done',
-      isWin: true
-    }
-  ];
-
-  const tutorial = {
-    visible: false,
-    step: 0,
-    grid: null,
-    prevGrid: null,
-    seedsLeft: 0,
-    ticksLeft: 0
-  };
-
-  function startTutorial() {
-    tutorial.visible = true;
-    tutorial.step = 0;
-    tutorial.grid = [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
-    tutorial.prevGrid = null;
-    tutorial.seedsLeft = TUT_SEEDS;
-    tutorial.ticksLeft = TUT_TICKS;
-    render();
+  function guideNext() {
+    if (!state.guide.active || !state.guide.seq) return null;
+    return state.guide.seq[state.guide.idx] || null;
   }
 
-  function finishTutorial() {
-    tutorial.visible = false;
-    localStorage.setItem(TUTORIAL_KEY, '1');
-    state.seenConcepts.add('rule');
-    state.seenConcepts.add('tick');
-    persistConcepts(state.seenConcepts);
-    render();
-  }
-
-  function tutorialAdvance() {
-    if (tutorial.step < TUT_STEPS.length - 1) {
-      tutorial.step++;
-      render();
-    } else {
-      finishTutorial();
+  function advanceGuide() {
+    if (!state.guide.active) return;
+    state.guide.idx++;
+    if (state.guide.idx >= state.guide.seq.length) {
+      state.guide.active = false;
+      localStorage.setItem(TUTORIAL_KEY, '1');
+      state.seenConcepts.add('rule');
+      state.seenConcepts.add('tick');
+      persistConcepts(state.seenConcepts);
     }
   }
 
-  function tutorialCellClick(x, y) {
-    const s = TUT_STEPS[tutorial.step];
-    if (s.advanceBy !== 'tap') return;
-    if (s.tapAt[0] !== x || s.tapAt[1] !== y) return;
-    if (tutorial.grid[y][x] === 1) return;
-    tutorial.prevGrid = cloneGrid(tutorial.grid);
-    tutorial.grid[y][x] = 1;
-    tutorial.seedsLeft--;
-    playSeed();
-    tutorialAdvance();
-  }
-
-  function tutorialTickClick() {
-    const s = TUT_STEPS[tutorial.step];
-    if (s.advanceBy !== 'tick') return;
-    if (tutorial.ticksLeft <= 0) return;
-    tutorial.prevGrid = cloneGrid(tutorial.grid);
-    tutorial.grid = step(tutorial.grid);
-    tutorial.ticksLeft--;
-    playTick();
-    setTimeout(playWin, 250);
-    tutorialAdvance();
+  function guideHintText() {
+    const a = guideNext();
+    if (!a) return '';
+    if (a.type === 'tick') return 'Жми Tick — по правилу сада клетки между семенами оживут, а семена уйдут.';
+    return 'Тапни светящуюся клетку, чтобы посадить семя.';
   }
 
   const state = {
@@ -164,7 +75,8 @@
     lastDelta: null,
     deltaConsumed: true,
     pendingEndAt: 0,
-    solving: false
+    solving: false,
+    guide: { active: false, seq: null, idx: 0 }
   };
 
   const SOLUTIONS = {
@@ -245,7 +157,7 @@
     return LEVELS.find(l => l.id === id);
   }
 
-  function loadLevel(id) {
+  function loadLevel(id, opts) {
     const lvl = getLevel(id);
     if (!lvl) return;
     state.solving = false;
@@ -263,10 +175,13 @@
     state.deltaConsumed = true;
     state.pendingEndAt = Date.now();
     state.introDismissed = false;
+    const wantGuide = (opts && typeof opts.guide === 'boolean')
+      ? opts.guide
+      : (id === 1);
+    state.guide = wantGuide
+      ? { active: true, seq: buildGuideSeq(SOLUTIONS[id]), idx: 0 }
+      : { active: false, seq: null, idx: 0 };
     render();
-    if (id === 1) {
-      startTutorial();
-    }
   }
 
   function dismissIntro(conceptId) {
@@ -313,11 +228,16 @@
     if (state.walls && state.walls[y][x]) return;
     if (state.anchors && state.anchors[y][x]) return;
     if (state.current[y][x] === 1) return;
+    if (state.guide.active && !state.solving) {
+      const a = guideNext();
+      if (!a || a.type !== 'place' || a.x !== x || a.y !== y) return;
+    }
     pushSnapshot();
     state.current[y][x] = 1;
     state.seedsLeft -= 1;
     setDelta({ action: 'seed', born: 1, died: 0, bornCells: [[x, y]], diedCells: [] });
     playSeed();
+    if (state.guide.active) advanceGuide();
     render();
     scheduleEndCheck();
   }
@@ -325,6 +245,10 @@
   function runTick() {
     if (state.view !== 'level') return;
     if (state.ticksLeft <= 0) return;
+    if (state.guide.active && !state.solving) {
+      const a = guideNext();
+      if (!a || a.type !== 'tick') return;
+    }
     pushSnapshot();
     const prev = state.current;
     state.current = step(state.current, state.walls, state.anchors);
@@ -332,6 +256,7 @@
     const delta = computeDelta(prev, state.current);
     setDelta({ action: 'tick', ...delta });
     playTick();
+    if (state.guide.active) advanceGuide();
     render();
     scheduleEndCheck();
   }
@@ -358,6 +283,7 @@
     const sol = SOLUTIONS[state.levelId];
     if (!sol) return;
     loadLevel(state.levelId);
+    state.guide = { active: false, seq: null, idx: 0 };
     const myToken = solveToken;
     state.solving = true;
     render();
@@ -428,148 +354,10 @@
       app.appendChild(renderLevel());
     }
     if (state.showRule) app.appendChild(renderRuleModal());
-    if (tutorial.visible) app.appendChild(renderTutorial());
     app.appendChild(renderMute());
     if (state.lastDelta && !state.deltaConsumed) {
       state.deltaConsumed = true;
     }
-  }
-
-  function renderTutorial() {
-    const s = TUT_STEPS[tutorial.step];
-    const total = TUT_STEPS.length;
-
-    const dots = document.createElement('div');
-    dots.className = 'tutorial-dots';
-    for (let i = 0; i < total; i++) {
-      const dot = document.createElement('span');
-      dot.className = 'tutorial-dot' + (i <= tutorial.step ? ' active' : '');
-      dots.appendChild(dot);
-    }
-
-    const isTickStep = s.advanceBy === 'tick';
-    const tickAttrs = {
-      class: 'btn-primary tutorial-tick' + (isTickStep ? ' tick-hint' : ''),
-      disabled: isTickStep ? false : true
-    };
-    if (isTickStep) tickAttrs.onclick = tutorialTickClick;
-    const tickButton = el('button', tickAttrs, 'Tick');
-
-    const counters = el('div', { class: 'tutorial-counters' }, [
-      el('span', { class: 'counter' }, [
-        el('span', { class: 'label' }, 'Seeds:'),
-        el('span', {}, String(tutorial.seedsLeft))
-      ]),
-      el('span', { class: 'counter' }, [
-        el('span', { class: 'label' }, 'Ticks:'),
-        el('span', {}, String(tutorial.ticksLeft))
-      ])
-    ]);
-
-    const actions = [
-      el('button', { class: 'btn-secondary', onclick: finishTutorial }, 'Пропустить')
-    ];
-    if (s.advanceBy === 'next') {
-      actions.push(el('button', { class: 'btn-primary tutorial-next next-hint', onclick: tutorialAdvance }, 'Дальше →'));
-    } else if (s.advanceBy === 'done') {
-      actions.push(el('button', { class: 'btn-primary tutorial-next next-hint', onclick: tutorialAdvance }, 'Начать!'));
-    }
-
-    const card = el('div', { class: 'tutorial-card' }, [
-      dots,
-      el('h2', { class: 'tutorial-title' }, s.title),
-      el('p', { class: 'tutorial-text' }, s.text),
-      el('div', { class: 'tutorial-stage' }, [
-        renderTutorialGridWrap(s),
-        counters,
-        tickButton
-      ]),
-      el('div', { class: 'tutorial-actions' }, actions)
-    ]);
-    return el('div', { class: 'tutorial-overlay' }, [card]);
-  }
-
-  function renderTutorialGridWrap(s) {
-    const wrap = el('div', { class: 'tutorial-grid-wrap' });
-    wrap.appendChild(renderTutorialGrid(s));
-    if (s.arrows && s.arrows.length) {
-      wrap.appendChild(renderTutorialArrows(s.arrows));
-    }
-    return wrap;
-  }
-
-  function renderTutorialArrows(arrows) {
-    const PITCH = 52;
-    const HALF = 22;
-    const SIZE = 5 * 44 + 4 * 8;
-    const container = el('div', { class: 'tutorial-arrows-container', 'aria-hidden': 'true' });
-    const lines = arrows.map(([from, to]) => {
-      const x1 = from[0] * PITCH + HALF;
-      const y1 = from[1] * PITCH + HALF;
-      const x2 = to[0] * PITCH + HALF;
-      const y2 = to[1] * PITCH + HALF;
-      const dx = x2 - x1, dy = y2 - y1;
-      const len = Math.hypot(dx, dy) || 1;
-      const ux = dx / len, uy = dy / len;
-      const x1a = (x1 + ux * (HALF * 0.65)).toFixed(1);
-      const y1a = (y1 + uy * (HALF * 0.65)).toFixed(1);
-      const x2a = (x2 - ux * (HALF * 0.55)).toFixed(1);
-      const y2a = (y2 - uy * (HALF * 0.55)).toFixed(1);
-      return `<line x1="${x1a}" y1="${y1a}" x2="${x2a}" y2="${y2a}" marker-end="url(#tut-arrow)" />`;
-    }).join('');
-    container.innerHTML = `
-      <svg viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" class="tutorial-arrows-svg">
-        <defs>
-          <marker id="tut-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#B8542E" />
-          </marker>
-        </defs>
-        ${lines}
-      </svg>
-    `;
-    return container;
-  }
-
-  function renderTutorialGrid(s) {
-    const grid = el('div', { class: 'grid tutorial-grid' });
-    const current = tutorial.grid || emptyGrid();
-    const prev = tutorial.prevGrid;
-    const tapTarget = s.advanceBy === 'tap' ? s.tapAt : null;
-    const previewSet = s.previewBirth ? new Set(s.previewBirth.map(c => c[0] + ',' + c[1])) : null;
-    const deathSet = s.previewDeath ? new Set(s.previewDeath.map(c => c[0] + ',' + c[1])) : null;
-    for (let y = 0; y < 5; y++) {
-      for (let x = 0; x < 5; x++) {
-        const alive = current[y][x] === 1;
-        const wasAlive = prev && prev[y][x] === 1;
-        const justDied = wasAlive && !alive;
-        const isTarget = TUT_GOAL[y][x] === 'X';
-        const isTapHere = tapTarget && tapTarget[0] === x && tapTarget[1] === y && !alive;
-        const isPulseGoal = s.pulseGoal && isTarget && !alive;
-        const isPreviewBirth = previewSet && previewSet.has(x + ',' + y) && !alive;
-        const isPreviewDeath = deathSet && deathSet.has(x + ',' + y) && alive;
-        const classes = ['cell'];
-        if (alive) classes.push('alive');
-        if (isTarget) classes.push('target');
-        if (justDied) classes.push('just-died');
-        if (isTapHere) classes.push('tap-here');
-        if (isPulseGoal) classes.push('demo-highlight');
-        if (isPreviewBirth) classes.push('preview-birth');
-        if (isPreviewDeath) classes.push('preview-death');
-        if (s.isWin && alive) classes.push('win-pulse');
-        const attrs = { class: classes.join(' ') };
-        if (isTapHere) {
-          const cx = x, cy = y;
-          attrs.onclick = () => tutorialCellClick(cx, cy);
-          attrs['aria-label'] = `Посади семя в клетке ряд ${y+1} столбец ${x+1}`;
-        } else {
-          attrs.disabled = true;
-          attrs['aria-hidden'] = 'true';
-        }
-        if (s.isWin && alive) attrs.style = `animation-delay: ${y * 40}ms`;
-        grid.appendChild(el('button', attrs));
-      }
-    }
-    return grid;
   }
 
   function renderIntroCard(lvl) {
@@ -703,7 +491,7 @@
       }, 'Play'),
       el('button', {
         class: 'btn-secondary tutorial-replay',
-        onclick: startTutorial
+        onclick: () => loadLevel(1, { guide: true })
       }, 'Туториал')
     ]));
 
@@ -752,11 +540,12 @@
       ])
     ]));
 
+    const guiding = state.guide.active && !state.solving;
     screen.appendChild(el('h2', { class: 'level-title' }, `"${lvl.title}"`));
-    screen.appendChild(el('p', { class: 'hint' }, lvl.hint));
+    screen.appendChild(el('p', { class: 'hint' }, guiding ? guideHintText() : lvl.hint));
     screen.appendChild(el('div', { class: 'divider' }));
 
-    const intro = renderIntroCard(lvl);
+    const intro = guiding ? null : renderIntroCard(lvl);
     if (intro) screen.appendChild(intro);
 
     const gridSection = el('div', { class: 'grid-section' });
@@ -785,16 +574,18 @@
     } else if (state.view === 'lose') {
       screen.appendChild(renderLosePanel(lvl));
     } else {
+      const guideTickNow = guiding && guideNext() && guideNext().type === 'tick';
+      const guideBlockTick = guiding && !guideTickNow;
       screen.appendChild(el('div', { class: 'actions' }, [
         el('button', {
           class: 'btn-secondary',
           onclick: undo,
-          disabled: state.history.length === 0 || state.solving ? true : false
+          disabled: state.history.length === 0 || state.solving || guiding ? true : false
         }, 'Undo'),
         el('button', {
-          class: 'btn-primary',
+          class: 'btn-primary' + (guideTickNow ? ' tick-hint' : ''),
           onclick: runTick,
-          disabled: state.ticksLeft <= 0 || state.solving ? true : false
+          disabled: state.ticksLeft <= 0 || state.solving || guideBlockTick ? true : false
         }, 'Tick')
       ]));
     }
@@ -840,6 +631,7 @@
     const showWin = state.view === 'win';
     const walls = state.walls;
     const anchors = state.anchors;
+    const guideAction = (state.guide.active && !state.solving) ? guideNext() : null;
     for (let y = 0; y < 5; y++) {
       for (let x = 0; x < 5; x++) {
         const isWall = walls && walls[y][x] === 1;
@@ -863,6 +655,8 @@
           if (!alive && isTarget) classes.push('lose-missing');
         }
         if (showWin && alive && !isAnchor) classes.push('win-pulse');
+        const isGuideTap = guideAction && guideAction.type === 'place' && guideAction.x === x && guideAction.y === y && !alive && !isWall && !isAnchor;
+        if (isGuideTap) classes.push('tap-here');
 
         const role = isWall ? 'стена' : isAnchor ? 'якорь' : (alive ? 'живая' : 'пустая');
         const targetStr = isTarget ? ', цель' : (isWildcard ? ', любое' : '');
@@ -874,6 +668,13 @@
         };
         if (isWall || isAnchor || alive || state.solving) {
           attrs.disabled = true;
+        } else if (guideAction) {
+          if (isGuideTap) {
+            const cx = x, cy = y;
+            attrs.onclick = () => placeSeed(cx, cy);
+          } else {
+            attrs.disabled = true;
+          }
         } else {
           const cx = x, cy = y;
           attrs.onclick = () => placeSeed(cx, cy);
@@ -953,14 +754,6 @@
   }
 
   document.addEventListener('keydown', (e) => {
-    if (tutorial.visible) {
-      if (e.key === 'Escape') { finishTutorial(); e.preventDefault(); }
-      else if (e.key === 'Enter' || e.key === 'ArrowRight') {
-        const s = TUT_STEPS[tutorial.step];
-        if (s.advanceBy === 'next' || s.advanceBy === 'done') { tutorialAdvance(); e.preventDefault(); }
-      }
-      return;
-    }
     if (state.showRule) {
       if (e.key === 'Escape') { state.showRule = false; render(); e.preventDefault(); }
       return;
