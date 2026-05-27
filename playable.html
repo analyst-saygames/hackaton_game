@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Chain Reaction Garden</title>
+<!-- Networks (AppLovin, ironSource, Vungle, Mintegral) inject mraid.js. The tag 404s harmlessly in a plain browser; the JS below guards for its absence. -->
+<script src="mraid.js"></script>
+<style>
+  :root {
+    --bg: #F4EFE6;
+    --bg2: #EBE5D8;
+    --ink: #1F1B16;
+    --ink-soft: #6B5F4E;
+    --alive: #2E4A1F;
+    --target: #1F1B16;
+    --accent: #B8542E;
+    --gold: #C99A3A;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    touch-action: manipulation;
+  }
+  #stage {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: min(3.2vh, 22px);
+    padding: 4vmin;
+  }
+  #headline {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 700;
+    font-size: clamp(18px, 5.4vmin, 30px);
+    text-align: center; line-height: 1.15; max-width: 92vw;
+    transition: opacity 220ms ease, transform 220ms ease;
+  }
+  #subhead {
+    margin-top: -0.8em;
+    font-size: clamp(12px, 3.4vmin, 16px);
+    color: var(--ink-soft); text-align: center;
+    transition: opacity 220ms ease;
+  }
+  /* ---- grid ---- */
+  #board { position: relative; }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(5, var(--cell));
+    grid-template-rows: repeat(5, var(--cell));
+    gap: var(--gap);
+    --cell: min(15vw, 13vh, 64px);
+    --gap: calc(var(--cell) * 0.22);
+  }
+  .cell {
+    position: relative; width: var(--cell); height: var(--cell);
+    border-radius: 50%; background: transparent;
+    border: 1.5px dashed rgba(107,95,78,0.28);
+    padding: 0; cursor: pointer;
+    transition: background-color 260ms cubic-bezier(.4,0,.2,1), border-color 260ms ease;
+  }
+  .cell.target { border: 2px solid var(--target); border-style: solid; }
+  .cell.alive { background: var(--alive); border: none; animation: bloom 300ms cubic-bezier(.34,1.56,.64,1); }
+  .cell.just-born { animation: born-flow 460ms cubic-bezier(.34,1.56,.64,1) 640ms both; }
+  .cell.just-died::before {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    background: var(--alive); animation: wilt 700ms cubic-bezier(.4,0,.2,1) forwards; pointer-events: none;
+  }
+  .cell.win-pulse { animation: win-pulse 640ms ease; }
+  .cell.tap-here { cursor: pointer; }
+  .cell.tap-here::after {
+    content: ''; position: absolute; inset: -4px; border-radius: 50%;
+    border: 3px solid var(--accent); pointer-events: none;
+    animation: tap-pulse .9s ease-in-out infinite; z-index: 3;
+  }
+  @keyframes bloom { 0%{transform:scale(.4)} 60%{transform:scale(1.08)} 100%{transform:scale(1)} }
+  @keyframes born-flow { 0%{background:transparent;transform:scale(0)} 60%{background:var(--alive);transform:scale(1.12)} 100%{background:var(--alive);transform:scale(1)} }
+  @keyframes wilt { 0%{transform:scale(1);opacity:1} 60%{transform:scale(.6);opacity:.45} 100%{transform:scale(.25);opacity:0} }
+  @keyframes win-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+  @keyframes tap-pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:0} }
+  /* ---- flow particles ---- */
+  #flow { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 5; }
+  .flow-particle {
+    fill: var(--alive); opacity: 0;
+    animation: flow-travel 850ms cubic-bezier(.4,0,.2,1) both;
+    filter: drop-shadow(0 0 5px rgba(46,74,31,.55));
+  }
+  @keyframes flow-travel {
+    0%{transform:translate(0,0);opacity:0} 12%{transform:translate(0,0);opacity:1}
+    85%{opacity:1} 100%{transform:translate(var(--dx),var(--dy));opacity:0}
+  }
+  /* ---- grow button ---- */
+  #grow {
+    font-family: inherit; font-weight: 700; font-size: clamp(15px, 4.2vmin, 20px);
+    color: #fff; background: var(--accent); border: none; border-radius: 999px;
+    padding: clamp(11px,3vmin,16px) clamp(28px,9vmin,44px); cursor: pointer;
+    box-shadow: 0 3px 0 0 rgba(31,27,22,.22);
+    transition: transform 90ms ease, opacity 200ms ease;
+    letter-spacing: .02em;
+  }
+  #grow:active { transform: translateY(3px); box-shadow: 0 0 0 0 rgba(31,27,22,.22); }
+  #grow.hidden { opacity: 0; pointer-events: none; }
+  #grow.pulse { animation: grow-bounce .9s ease-in-out infinite; }
+  @keyframes grow-bounce {
+    0%,100%{transform:translateY(0);box-shadow:0 3px 0 0 rgba(31,27,22,.22)}
+    50%{transform:translateY(-5px);box-shadow:0 8px 16px 0 rgba(184,84,46,.5)}
+  }
+  /* ---- end card ---- */
+  #endcard {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: min(3vh, 22px); padding: 8vmin;
+    background: radial-gradient(120% 90% at 50% 0%, var(--bg2) 0%, var(--bg) 70%);
+    opacity: 0; pointer-events: none; transform: translateY(14px);
+    transition: opacity 420ms ease, transform 420ms ease;
+  }
+  #endcard.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  #endcard .logo {
+    font-family: Georgia, "Times New Roman", serif; font-weight: 700;
+    font-size: clamp(28px, 8vmin, 48px); line-height: 1.05; text-align: center;
+    letter-spacing: -.5px;
+  }
+  #endcard .logo span { display: block; }
+  #endcard .tagline { color: var(--ink-soft); font-size: clamp(13px,3.6vmin,17px); text-align: center; max-width: 80vw; }
+  #endcard .mini {
+    display: grid; grid-template-columns: repeat(5, min(8vw,30px)); gap: min(1.6vw,6px);
+    margin: min(1vh,6px) 0;
+  }
+  #endcard .mini i {
+    width: 100%; aspect-ratio: 1; border-radius: 50%;
+    border: 1.5px dashed rgba(107,95,78,.3); background: transparent;
+  }
+  #endcard .mini i.on { background: var(--alive); border: none; }
+  #cta {
+    font-family: inherit; font-weight: 800; font-size: clamp(17px,5vmin,24px);
+    color: #fff; background: var(--accent); border: none; border-radius: 999px;
+    padding: clamp(14px,3.6vmin,20px) clamp(40px,12vmin,64px); cursor: pointer;
+    box-shadow: 0 4px 0 0 rgba(31,27,22,.22);
+    animation: cta-bounce 1.1s ease-in-out infinite;
+  }
+  #cta:active { transform: translateY(4px); box-shadow: 0 0 0 0 rgba(31,27,22,.22); }
+  @keyframes cta-bounce {
+    0%,100%{transform:scale(1)} 50%{transform:scale(1.06)}
+  }
+  /* confetti */
+  .confetti { position: fixed; top: -12px; width: 9px; height: 14px; z-index: 15; opacity: .95; will-change: transform; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(540deg); opacity: 0; } }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="headline">Chain Reaction Garden</div>
+    <div id="subhead">Tap the glowing spots</div>
+    <div id="board">
+      <div id="grid"></div>
+      <svg id="flow" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
+    </div>
+    <button id="grow" class="hidden">Grow</button>
+  </div>
+
+  <div id="endcard">
+    <div class="logo"><span>Chain Reaction</span><span>Garden</span></div>
+    <div class="mini" id="endMini"></div>
+    <div class="tagline">One tap blooms the whole garden. Hundreds of puzzles await.</div>
+    <button id="cta">Play Now</button>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- config ---------------- */
+  // TODO: set the real store URL for the campaign before shipping.
+  var STORE_URL = "https://play.google.com/store/apps/details?id=com.saygames.chainreactiongarden";
+
+  /* ---------------- MRAID glue ---------------- */
+  function hasMraid() {
+    try { return typeof mraid !== "undefined" && !!mraid.open; } catch (e) { return false; }
+  }
+
+  function clickThrough() {
+    try {
+      if (typeof mraid !== "undefined" && mraid.open) { mraid.open(STORE_URL); return; }
+    } catch (e) {}
+    // Fallbacks for other SDKs:
+    try { if (typeof mraidutils !== "undefined" && mraidutils.openStore) { mraidutils.openStore(); return; } } catch (e) {}
+    try { if (window.install) { window.install(); return; } } catch (e) {}
+    window.open(STORE_URL, "_blank");
+  }
+
+  // Inside a real ad SDK the CTA goes to the store. In a plain-browser
+  // preview (no mraid) there is no store, so replay the demo instead.
+  function onCta() {
+    if (hasMraid()) clickThrough();
+    else resetPlayable();
+  }
+
+  function whenReady(cb) {
+    if (typeof mraid === "undefined") { cb(); return; }
+    if (mraid.getState && mraid.getState() === "loading") {
+      mraid.addEventListener("ready", function onReady() {
+        mraid.removeEventListener("ready", onReady);
+        cb();
+      });
+    } else {
+      cb();
+    }
+  }
+
+  /* ---------------- engine ---------------- */
+  function neighbors(g, x, y) {
+    var c = 0;
+    for (var dy = -1; dy <= 1; dy++) {
+      for (var dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        var ny = y + dy, nx = x + dx;
+        if (ny >= 0 && ny < 5 && nx >= 0 && nx < 5) c += g[ny][nx];
+      }
+    }
+    return c;
+  }
+  function step(g) {
+    var out = [];
+    for (var y = 0; y < 5; y++) {
+      out.push([]);
+      for (var x = 0; x < 5; x++) out[y].push(neighbors(g, x, y) === 2 ? 1 : 0);
+    }
+    return out;
+  }
+
+  /* ---------------- levels ---------------- */
+  // Each level: goal grid (target rings), the seeds the player is guided to plant,
+  // and the on-screen copy. The seeds are tapped in order; only the hinted spot is active.
+  var LEVELS = [
+    {
+      goal:  [[0,0,0,0,0],[0,0,0,0,0],[0,1,1,1,0],[0,0,0,0,0],[0,0,0,0,0]],
+      seeds: [[2,1],[2,3]],
+      introH: "Chain Reaction Garden", introS: "Tap the glowing spots",
+      growH: "Now grow the garden!"
+    },
+    {
+      // 3 seeds in the centre column bloom into a 5-cell star.
+      goal:  [[0,0,0,0,0],[0,1,0,1,0],[0,0,1,0,0],[0,1,0,1,0],[0,0,0,0,0]],
+      seeds: [[2,1],[2,2],[2,3]],
+      introH: "One more — bigger!", introS: "Tap all 3 glowing spots",
+      growH: "Grow the bloom!"
+    }
+  ];
+
+  var levelIdx = 0;
+  var GOAL = LEVELS[0].goal;
+  var SEEDS = LEVELS[0].seeds;
+  var grid = [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
+  var placed = 0;                       // how many seeds planted
+  var phase = "place";                  // place -> grow -> won
+
+  function loadLevel(i) {
+    levelIdx = i;
+    GOAL = LEVELS[i].goal;
+    SEEDS = LEVELS[i].seeds;
+    grid = [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
+    placed = 0;
+    phase = "place";
+    growBtn.classList.add("hidden");
+    growBtn.classList.remove("pulse");
+    flowEl.innerHTML = "";
+    buildGrid();
+    render();
+    setCopy(LEVELS[i].introH, LEVELS[i].introS);
+  }
+
+  var gridEl = document.getElementById("grid");
+  var flowEl = document.getElementById("flow");
+  var growBtn = document.getElementById("grow");
+  var headline = document.getElementById("headline");
+  var subhead = document.getElementById("subhead");
+
+  var cells = [];
+  function buildGrid() {
+    gridEl.innerHTML = "";
+    cells = [];
+    for (var y = 0; y < 5; y++) {
+      cells.push([]);
+      for (var x = 0; x < 5; x++) {
+        var b = document.createElement("button");
+        b.className = "cell";
+        b.dataset.x = x; b.dataset.y = y;
+        b.addEventListener("click", onCellTap);
+        gridEl.appendChild(b);
+        cells[y].push(b);
+      }
+    }
+  }
+
+  function nextSeedTarget() {
+    return placed < SEEDS.length ? SEEDS[placed] : null;
+  }
+
+  function render(opts) {
+    opts = opts || {};
+    var target = phase === "place" ? nextSeedTarget() : null;
+    for (var y = 0; y < 5; y++) {
+      for (var x = 0; x < 5; x++) {
+        var cell = cells[y][x];
+        var cls = ["cell"];
+        if (GOAL[y][x] === 1) cls.push("target");
+        if (grid[y][x] === 1) cls.push("alive");
+        if (opts.justBorn && opts.justBorn.some(function (c){return c[0]===x&&c[1]===y;})) cls.push("just-born");
+        if (target && target[0] === x && target[1] === y && grid[y][x] === 0) cls.push("tap-here");
+        if (opts.win && grid[y][x] === 1) cls.push("win-pulse");
+        cell.className = cls.join(" ");
+        if (opts.win && grid[y][x] === 1) cell.style.animationDelay = (y * 45) + "ms";
+        else cell.style.animationDelay = "";
+      }
+    }
+    // dying cells: overlay via a transient class on cells that were alive last frame
+    if (opts.justDied) {
+      opts.justDied.forEach(function (c) {
+        var el = cells[c[1]][c[0]];
+        el.className = "cell" + (GOAL[c[1]][c[0]] === 1 ? " target" : "") + " just-died";
+      });
+    }
+  }
+
+  /* ---------------- particles ---------------- */
+  function cellCenterPx() {
+    // measured from rendered layout so it tracks responsive sizing
+    var rect0 = cells[0][0].getBoundingClientRect();
+    var rect1 = cells[0][1].getBoundingClientRect();
+    var boardRect = document.getElementById("board").getBoundingClientRect();
+    var size = rect0.width;
+    var pitch = rect1.left - rect0.left;
+    var ox = rect0.left - boardRect.left;
+    var oy = rect0.top - boardRect.top;
+    return { size: size, pitch: pitch, ox: ox, oy: oy };
+  }
+
+  function spawnFlows(prev, next) {
+    var m = cellCenterPx();
+    var board = document.getElementById("board");
+    flowEl.setAttribute("width", board.clientWidth);
+    flowEl.setAttribute("height", board.clientHeight);
+    flowEl.setAttribute("viewBox", "0 0 " + board.clientWidth + " " + board.clientHeight);
+    flowEl.innerHTML = "";
+    var idx = 0;
+    for (var y = 0; y < 5; y++) {
+      for (var x = 0; x < 5; x++) {
+        if (prev[y][x] === 0 && next[y][x] === 1) {
+          for (var dy = -1; dy <= 1; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              var ny = y + dy, nx = x + dx;
+              if (ny>=0&&ny<5&&nx>=0&&nx<5 && prev[ny][nx]===1) {
+                var fx = m.ox + nx*m.pitch + m.size/2;
+                var fy = m.oy + ny*m.pitch + m.size/2;
+                var tx = m.ox + x*m.pitch + m.size/2;
+                var ty = m.oy + y*m.pitch + m.size/2;
+                var c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+                c.setAttribute("cx", fx.toFixed(1));
+                c.setAttribute("cy", fy.toFixed(1));
+                c.setAttribute("r", Math.max(5, m.size*0.13).toFixed(1));
+                c.setAttribute("class","flow-particle");
+                c.setAttribute("style","--dx:"+(tx-fx).toFixed(1)+"px;--dy:"+(ty-fy).toFixed(1)+"px;animation-delay:"+(idx*55)+"ms");
+                flowEl.appendChild(c);
+                idx++;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* ---------------- audio (procedural, gated on gesture) ---------------- */
+  var actx = null;
+  function ac() {
+    if (actx) return actx;
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+    return actx;
+  }
+  function blip(freq, dur, when, type) {
+    var c = ac(); if (!c) return;
+    var t = c.currentTime + (when || 0);
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function sndSeed() { blip(523, 0.18); }
+  function sndGrow() { blip(392, 0.16, 0); blip(523, 0.18, 0.08); }
+  function sndWin() { [523,659,784,1047].forEach(function(f,i){ blip(f,0.28,i*0.09,"triangle"); }); }
+
+  /* ---------------- interaction ---------------- */
+  function setCopy(h, s) {
+    headline.style.opacity = 0;
+    subhead.style.opacity = 0;
+    setTimeout(function () {
+      headline.textContent = h;
+      subhead.textContent = s || "";
+      headline.style.opacity = 1;
+      subhead.style.opacity = s ? 1 : 0;
+    }, 160);
+  }
+
+  function onCellTap(e) {
+    if (phase !== "place") return;
+    var x = +e.currentTarget.dataset.x, y = +e.currentTarget.dataset.y;
+    var target = nextSeedTarget();
+    if (!target || target[0] !== x || target[1] !== y) return; // only the hinted spot is active
+    grid[y][x] = 1;
+    placed++;
+    sndSeed();
+    render();
+    if (placed >= SEEDS.length) {
+      phase = "grow";
+      setCopy(LEVELS[levelIdx].growH, "");
+      growBtn.classList.remove("hidden");
+      requestAnimationFrame(function(){ growBtn.classList.add("pulse"); });
+    }
+  }
+
+  function onGrow() {
+    if (phase !== "grow") return;
+    phase = "won";
+    growBtn.classList.remove("pulse");
+    growBtn.classList.add("hidden");
+    sndGrow();
+
+    var prev = grid.map(function(r){return r.slice();});
+    var next = step(prev);
+
+    var born = [], died = [];
+    for (var y=0;y<5;y++) for (var x=0;x<5;x++){
+      if (prev[y][x]===0 && next[y][x]===1) born.push([x,y]);
+      else if (prev[y][x]===1 && next[y][x]===0) died.push([x,y]);
+    }
+
+    spawnFlows(prev, next);
+    grid = next;
+    // show dying overlay + keep born hidden until particles land
+    render({ justBorn: born, justDied: died });
+
+    setTimeout(function () {
+      sndWin();
+      render({ win: true });
+      launchConfetti();
+      setTimeout(function () {
+        if (levelIdx + 1 < LEVELS.length) loadLevel(levelIdx + 1);
+        else showEndcard();
+      }, 1200);
+    }, 1250);
+  }
+
+  /* ---------------- celebration + endcard ---------------- */
+  function launchConfetti() {
+    var colors = ["#B8542E","#2E4A1F","#C99A3A","#D9A57F"];
+    for (var i = 0; i < 26; i++) {
+      (function (i) {
+        var d = document.createElement("div");
+        d.className = "confetti";
+        d.style.left = (Math.random()*100) + "vw";
+        d.style.background = colors[i % colors.length];
+        d.style.borderRadius = (Math.random()<0.5) ? "2px" : "50%";
+        d.style.animation = "fall " + (1100 + Math.random()*900) + "ms ease-in " + (Math.random()*250) + "ms forwards";
+        document.body.appendChild(d);
+        setTimeout(function(){ d.remove(); }, 2600);
+      })(i);
+    }
+  }
+
+  function buildEndMini() {
+    var wrap = document.getElementById("endMini");
+    var pattern = [0,0,0,0,0, 0,1,0,1,0, 0,1,0,1,0, 0,0,0,0,0, 0,0,0,0,0]; // a little bloom
+    wrap.innerHTML = "";
+    pattern.forEach(function (v) {
+      var i = document.createElement("i");
+      if (v) i.className = "on";
+      wrap.appendChild(i);
+    });
+  }
+
+  function showEndcard() {
+    buildEndMini();
+    document.getElementById("endcard").classList.add("show");
+  }
+
+  function resetPlayable() {
+    Array.prototype.slice.call(document.querySelectorAll(".confetti")).forEach(function (c) { c.remove(); });
+    document.getElementById("endcard").classList.remove("show");
+    loadLevel(0);
+  }
+
+  /* ---------------- boot ---------------- */
+  function start() {
+    growBtn.addEventListener("click", onGrow);
+    document.getElementById("cta").addEventListener("click", onCta);
+    document.getElementById("endcard").addEventListener("click", function (e) {
+      if (e.target.id === "endcard") onCta(); // tapping the card background acts like the CTA
+    });
+    loadLevel(0);
+  }
+
+  whenReady(start);
+})();
+</script>
+</body>
+</html>
