@@ -470,9 +470,9 @@
       el('button', { class: 'btn-secondary', onclick: finishTutorial }, 'Пропустить')
     ];
     if (s.advanceBy === 'next') {
-      actions.push(el('button', { class: 'btn-primary', onclick: tutorialAdvance }, 'Дальше'));
+      actions.push(el('button', { class: 'btn-primary tutorial-next next-hint', onclick: tutorialAdvance }, 'Дальше →'));
     } else if (s.advanceBy === 'done') {
-      actions.push(el('button', { class: 'btn-primary', onclick: tutorialAdvance }, 'Начать!'));
+      actions.push(el('button', { class: 'btn-primary tutorial-next next-hint', onclick: tutorialAdvance }, 'Начать!'));
     }
 
     const card = el('div', { class: 'tutorial-card' }, [
