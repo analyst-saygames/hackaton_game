@@ -160,6 +160,7 @@
   function loadLevel(id, opts) {
     const lvl = getLevel(id);
     if (!lvl) return;
+    clearCelebration();
     state.solving = false;
     solveToken++;
     const parsed = parseLevel(lvl.start);
@@ -215,11 +216,40 @@
         persistSolved();
         playWin();
         render();
+        launchConfetti();
       } else if (state.seedsLeft === 0 && state.ticksLeft === 0) {
         state.view = 'lose';
         render();
+        flashLose();
       }
     }, END_DELAY_MS);
+  }
+
+  // Celebration / fail feedback. These live on document.body, outside #app,
+  // so render() (which wipes #app) never clears them mid-animation.
+  function launchConfetti() {
+    const colors = ['#B8542E', '#2E4A1F', '#C99A3A', '#D9A57F', '#9CC15B'];
+    for (let i = 0; i < 70; i++) {
+      const d = document.createElement('div');
+      d.className = 'confetti-piece';
+      d.style.left = (Math.random() * 100) + 'vw';
+      d.style.background = colors[i % colors.length];
+      d.style.borderRadius = Math.random() < 0.5 ? '2px' : '50%';
+      d.style.animation = 'confetti-fall ' + (1400 + Math.random() * 1300) + 'ms ease-in ' + (Math.random() * 400) + 'ms forwards';
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 3300);
+    }
+  }
+
+  function flashLose() {
+    const f = document.createElement('div');
+    f.className = 'lose-flash';
+    document.body.appendChild(f);
+    setTimeout(() => f.remove(), 1000);
+  }
+
+  function clearCelebration() {
+    document.querySelectorAll('.confetti-piece, .lose-flash').forEach(n => n.remove());
   }
 
   function placeSeed(x, y) {
@@ -311,6 +341,7 @@
   }
 
   function goToMenu() {
+    clearCelebration();
     state.view = 'menu';
     render();
   }
